@@ -21,10 +21,10 @@ def get_variable_names_of_R_poly(express: str):
     """
     import re
     variable = re.search(r"poly\(([\w\d]+),.*\)", express)
-    _degree = re.search(r"poly.*degree=(\d+)", express)
+    _degree = re.search(r"poly\(.*\)(\d+)", express)
     degree = int(_degree.groups()[0]) if _degree else 1
 
-    return [f"{variable.groups()[0]}_{i+1}" for i in range(int(degree))] if variable else [express]
+    return f"{variable.groups()[0]}_{degree}" if variable else express
 
 
 def count_degree(express):
@@ -37,20 +37,14 @@ class IRegressionModelResult:
     def __init__(self,
                  model_result,
                  objective_variable_name,
-                 express_variable_names,
-                 express_variables_number,
                  model_discription
                  ):
         self.model_result = model_result
         self.objective_name = objective_variable_name
-        self.variable_names = express_variable_names
-        self.variables_number = express_variables_number
         self.model_discription = model_discription
-        self.model_type = ""
 
     def __repr__(self):
-        return f"{self.model_type}\n"\
-            + f"{self.model_discription}\n"\
+        return f"{self.model_discription}\n"\
             + f"Objective: {self.objective_name}\n"\
             + f"Variables: {self.variable_names}\n"
 
@@ -92,16 +86,13 @@ class FailedResult(IRegressionModelResult):
         self,
         model_result,
         objective_variable_name,
-        express_variable_names,
-        express_variables_number,
         model_discription,
     ):
         super(FailedResult, self).__init__(model_result,
                                            objective_variable_name,
-                                           express_variable_names,
-                                           express_variables_number,
                                            model_discription,)
         self.model_type = "Model fit failed"
+        self.variable_names = [""]
 
     def summary(self):
         return self.result()
@@ -111,70 +102,94 @@ class LMResult(IRegressionModelResult):
     def __init__(self,
                  model_result,
                  objective_variable_name,
-                 express_variable_names,
-                 express_variables_number,
                  model_discription,
                  ):
         super(LMResult, self).__init__(model_result,
                                        objective_variable_name,
-                                       express_variable_names,
-                                       express_variables_number,
                                        model_discription,)
         self.model_type = "R built in lm"
+        self.get_variables()
+
+    def get_coeff_matrix(self,coeff_index):
+        return self.summary()[:][coeff_index]
+
+    def get_variables(self,coeff_index):
+        names = list(map(get_variable_names_of_R_poly,
+                         self.get_coeff_matrix(coeff_index).names[0]))
+        self.variable_names = names
 
 
 class GLMResult(IRegressionModelResult):
     def __init__(self,
                  model_result,
                  objective_variable_name,
-                 express_variable_names,
-                 express_variables_number,
                  model_discription,
                  ):
         super(GLMResult, self).__init__(model_result,
                                         objective_variable_name,
-                                        express_variable_names,
-                                        express_variables_number,
                                         model_discription,)
         self.model_type = "R package glm2"
+        self.get_variables()
+
+    def get_coeff_matrix(self):
+        return self.summary()[:][11]
+
+    def get_variables(self):
+        names = list(map(get_variable_names_of_R_poly,self.get_coeff_matrix().names[0]))
+        self.variable_names = names
 
 
 class LM(IRegressionModel):
+    """
+    Usage
+    -----
+    lm = LM()
+    lm.fit(data, y_column, x_column1, x_column_2)
+    coeff = lm.coeff()
+    """
+
     def __init__(self):
         self.Result = LMResult
         self.Failed = FailedResult
+        self.model_name = "lm"
+        self.coeff_matrix_index = 3
 
     def discript_model(self):
-        return f"LM model: {self.formula}"
+        return f"{self.model_name} model: {self.create_R_call_string()}"
+
+    def set_formula(self,y,xs):
+        expression = reduce(lambda acc, e: acc+"+" +
+                            e if acc != "" else e, xs, "")
+        formula = f"{y}~{expression}"
+        self.formula = formula
+
+    def set_fit_kwargs(self,kwargs):
+        self.call_kwargs = reduce(
+            lambda acc, e: acc+","+e if acc is not "" else e,
+            [f"{key}={value}" for key, value in lm_kwargs.items()],
+            "")
+
+    def create_R_call_string(self):
+        return f"{self.model_name}({self.formula},data=d,{self.call_kwargs})"
 
     def fit(self, df, y, *xs, **lm_kwargs):
 
         if len(xs) is 0:
             raise Exception("At least 1 predicative variable required.")
 
-        lm_kwargs_string = reduce(
-            lambda acc, e: acc+","+e if acc is not "" else e,
-            [f"{key}={value}" for key, value in lm_kwargs.items()],
-            "")
-
-        variable_names = reduce(
-            lambda acc, e: acc+e, map(get_variable_names_of_R_poly, xs), ["Intercept"])
-        num_variable = 1 + reduce(lambda acc, e: acc+e, map(count_degree, xs))
-
-        expression = reduce(lambda acc, e: acc+"+" +
-                            e if acc != "" else e, xs, "")
-        formula = f"{y}~{expression}"
-        self.formula = formula
+        self.set_formula(y,xs)
+        self.set_fit_kwargs(lm_kwargs)
 
         robjects.r.assign("d", df)
-        call_string = f"lm({formula},data=d,{lm_kwargs_string})"
+        call_string = self.create_R_call_string()
+
         try:
             result = robjects.r(call_string)
             self._result = self.Result(
-                result, y, variable_names, num_variable, self.discript_model())
+                result, y, self.discript_model())
         except Exception as e:
             self._result = self.Failed(
-                None, y, variable_names, num_variable, self.discript_model()+f"\n{e}")
+                None, y, self.discript_model()+f"\n{e}")
 
         return self
 
@@ -184,9 +199,11 @@ class LM(IRegressionModel):
         if type(result) is self.Failed:
             coeff = [[None for __ in result.variables()] for _ in range(4)]
         else:
-            coeff_vector = result.summary()[:][3]
+            coeff_vector = result.get_coeff_matrix(self.coeff_matrix_index)
             coeff = np.array(coeff_vector).reshape(
-                (len(result.variables()), 4)).transpose()
+                (len(result.variables(self.coeff_matrix_index)), 4)).transpose()
+
+        variables = result.variables(self.coeff_matrix_index)
 
         coeff_array = {
             "estimated": coeff[0],
@@ -196,10 +213,10 @@ class LM(IRegressionModel):
         }
 
         coeff_dict = {
-            "estimated": {k: v for k, v in zip(result.variables(), coeff[0])},
-            "std-error": {k: v for k, v in zip(result.variables(), coeff[1])},
-            "t-value": {k: v for k, v in zip(result.variables(), coeff[2])},
-            "p-value": {k: v for k, v in zip(result.variables(), coeff[3])}
+            "estimated": {k: v for k, v in zip(variables, coeff[0])},
+            "std-error": {k: v for k, v in zip(variables, coeff[1])},
+            "t-value": {k: v for k, v in zip(variables, coeff[2])},
+            "p-value": {k: v for k, v in zip(variables, coeff[3])}
         }
         result_dict = {
             "coeff": coeff_array,
@@ -231,10 +248,6 @@ class GLM(IRegressionModel):
             [f"{key}={value}" for key, value in glm_kwargs.items()],
             "")
 
-        variable_names = reduce(
-            lambda acc, e: acc+e, map(get_variable_names_of_R_poly, xs), ["Intercept"])
-        num_variable = 1 + reduce(lambda acc, e: acc+e, map(count_degree, xs))
-
         expression = reduce(lambda acc, e: acc+"+" +
                             e if acc != "" else e, xs, "")
         formula = f"{y}~{expression}"
@@ -246,10 +259,10 @@ class GLM(IRegressionModel):
         try:
             result = robjects.r(call_string)
             self._result = self.Result(
-                result, y, variable_names, num_variable, self.discript_model())
+                result, y, self.discript_model())
         except Exception as e:
             self._result = self.Failed(
-                None, y, variable_names, num_variable, self.discript_model()+f"\n{e}")
+                None, y, self.discript_model()+f"\n{e}")
 
         return self
 
@@ -259,7 +272,7 @@ class GLM(IRegressionModel):
         if type(result) is self.Failed:
             coeff = [[None for __ in result.variables()] for _ in range(4)]
         else:
-            coeff_vector = result.summary()[:][11]
+            coeff_vector = result.get_coeff_matrix()
             coeff = np.array(coeff_vector).reshape(
                 (len(result.variables()), 4)).transpose()
 
