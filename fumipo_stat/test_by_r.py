@@ -19,6 +19,9 @@ def shapiro_test(array_like):
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
+    """
+    等分散性の検定
+    """
     block_df = dataframe.create_complete_block_designed_df(
         matrix_selector, group_selector, block_selectors
     )(df).values
@@ -27,10 +30,19 @@ def bartlett_test(df, matrix_selector, group_selector, block_selectors):
     return as_dict(result)
 
 
-def wilcoxon_signed_rank_test(df, group, y, method="bonferroni"):
+def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
+    """
+    (対応のある)データのノンパラメトリックな群間比較
 
+
+    Parameters
+    ----------
+    df: pandas.DataFrame
+    group: str
+    y: str
+    """
     robjects.r.assign("d", pandas2ri.py2ri(df))
     result = robjects.r(
-        f"pairwise.wilcox.test(d${y},d${group},paired=T,p.adjust.method='{method}')")
+        f"pairwise.wilcox.test(d${y},d${group},paired={'T' if paired else 'F'},p.adjust.method='{method}')")
     result_dict = as_dict(result)
     return result_dict
