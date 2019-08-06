@@ -3,7 +3,7 @@ import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri, numpy2ri
 pandas2ri.activate()
-import func_helper.func_helper.dataframe as dataframe
+import dataframe_helper as dataframe
 from .r_to_py import as_dict
 
 
