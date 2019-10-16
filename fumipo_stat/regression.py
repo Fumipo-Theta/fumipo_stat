@@ -32,10 +32,11 @@ def get_variable_names_of_R_poly(express: str):
 
     return f"{variable.groups()[0]}_{degree}" if variable else express
 
-assert(get_variable_names_of_R_poly("poly(param,degree=2")\
-     == ["param_1", "param_2"])
-assert(get_variable_names_of_R_poly("param")\
-     == ["param"])
+
+# assert(get_variable_names_of_R_poly("poly(param,degree=2)")
+#       == ["param_1", "param_2"])
+# assert(get_variable_names_of_R_poly("param")
+#       == ["param"])
 
 
 def count_degree(express):
@@ -197,7 +198,7 @@ class GLM2Result(IRegressionModelResult):
         return null_dev[0] if null_dev is not None else None
 
     @presentable
-    def psuedo_r_sqared(self):
+    def psuedo_r_squared(self):
         return (1-self.residual_deviance()/self.null_deviance())
 
 
