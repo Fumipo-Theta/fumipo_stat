@@ -1,6 +1,8 @@
+import rpy2
 import rpy2.robjects as robjects
 import numpy as np
 from functools import reduce
+
 
 def as_dict(vector):
     """Convert an RPy2 ListVector to a Python dict"""
@@ -8,6 +10,8 @@ def as_dict(vector):
     for i, name in enumerate(vector.names):
         if isinstance(vector[i], robjects.ListVector):
             result[name] = as_dict(vector[i])
+        elif isinstance(vector[i], rpy2.rinterface.RNULLType):
+            result[name] = "Null"
         elif len(vector[i]) == 1:
             result[name] = vector[i][0]
         else:
