@@ -1,8 +1,10 @@
 from scipy import stats as scipy_stats
+import numpy as np
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
 from rpy2.robjects import pandas2ri, numpy2ri
 pandas2ri.activate()
+numpy2ri.activate()
 import dataframe_helper as dataframe
 from .r_to_py import as_dict
 
@@ -44,5 +46,15 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
     robjects.r.assign("d", pandas2ri.py2ri(df))
     result = robjects.r(
         f"pairwise.wilcox.test(d${y},d${group},paired={'T' if paired else 'F'},p.adjust.method='{method}')")
+    result_dict = as_dict(result)
+    return result_dict
+
+
+def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray):
+    robjects.r.assign("x", x)
+    robjects.r.assign("y", y)
+    result = robjects.r(
+        f"wilcox.test(x, y)"
+    )
     result_dict = as_dict(result)
     return result_dict
