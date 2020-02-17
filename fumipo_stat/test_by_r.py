@@ -14,8 +14,9 @@ def ANOVA(*array_likes):
 
 
 def shapiro_test(array_like):
-
-    # 正規性テスト
+    """
+    正規性テスト
+    """
     shapiro1 = scipy_stats.shapiro(array_like)
     return shapiro1
 
@@ -42,6 +43,7 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
     df: pandas.DataFrame
     group: str
     y: str
+    paired: bool
     """
     robjects.r.assign("d", pandas2ri.py2ri(df))
     result = robjects.r(
@@ -51,6 +53,11 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
 
 
 def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray):
+    """
+    ノンパラメトリックな代表値比較の検定
+
+    x,y 2つのベクトルの中央値が等しいという帰無仮説を検定する.
+    """
     robjects.r.assign("x", x)
     robjects.r.assign("y", y)
     result = robjects.r(
