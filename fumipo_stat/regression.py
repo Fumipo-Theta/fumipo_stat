@@ -148,9 +148,13 @@ class LMResult(IRegressionModelResult):
             return (PrettyNamedMatrix(coeff_matrix, rownames=variables))
 
     @presentable
-    def r_sqared(self):
+    def r_squared(self):
         r2 = self.get_summary_section(8, None)
         return r2[0] if r2 is not None else None
+
+    @presentable
+    def r_sqared(self):
+        return self.r_squared()
 
 
 class GLM2Result(IRegressionModelResult):
