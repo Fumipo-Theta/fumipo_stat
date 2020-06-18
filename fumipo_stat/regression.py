@@ -5,6 +5,7 @@ base = importr('base')
 importr("multcomp")
 importr("glm2")
 from functools import reduce
+import re
 
 
 def presentable(func):
@@ -25,7 +26,7 @@ def get_variable_names_of_R_poly(express: str):
     get_variable_names("param")
     > ["param"]
     """
-    import re
+
     variable = re.search(r"poly\(([\w\d]+),.*\)", express)
     _degree = re.search(r"poly\(.*\)(\d+)", express)
     degree = int(_degree.groups()[0]) if _degree else 1
@@ -169,6 +170,9 @@ class GLM2Result(IRegressionModelResult):
         self.model_type = "R package glm2"
 
     def get_variables(self):
+        # This gets invalid attribute when the data set has any NA values.
+        # In the case, self.get_summary_section(10, None) will be (omit,)
+        # , and self.get_summary_section(12, None) is coeff_matrix
         coeff_matrix = self.get_summary_section(11, None)
         names = list(map(get_variable_names_of_R_poly,
                          coeff_matrix.names[0])) if coeff_matrix is not None else []
@@ -186,10 +190,17 @@ class GLM2Result(IRegressionModelResult):
 
     @presentable
     def AIC(self):
-        if type(self.result()) is FailedResult:
+        result = self.result()
+        if type(result) is FailedResult:
             return (None)
+        sample_size = result[16][0]
+        parameter_size = sample_size - result[15][0]
         aic = self.get_summary_section(4)[0]
-        return (aic)
+        return aic
+        # if (sample_size/parameter_size) > 40:
+        #    return aic
+        # else:
+        #    return aic * sample_size / (sample_size - parameter_size - 1)
 
     @presentable
     def residual_deviance(self):

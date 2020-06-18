@@ -7,18 +7,39 @@ pandas2ri.activate()
 numpy2ri.activate()
 import dataframe_helper as dataframe
 from .r_to_py import as_dict
+import dataclasses
 
 
 def ANOVA(*array_likes):
     return scipy_stats.f_oneway(*array_likes)
 
 
+@dataclasses.dataclass()
+class ShapiroResult:
+    statistics: float
+    pvalue: float
+
+
+@dataclasses.dataclass()
+class InvalidResult:
+    statistics: float
+    pvalue: float
+
+
 def shapiro_test(array_like):
     """
     正規性テスト
+
+    Returns
+    -------
+    (w: float, p: float)
+    w: test statistics
+    p: The p-value for the hypothesis test.
     """
-    shapiro1 = scipy_stats.shapiro(array_like)
-    return shapiro1
+    if len(array_like) < 3:
+        return InvalidResult(None, None)
+
+    return ShapiroResult(*scipy_stats.shapiro(array_like))
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
@@ -31,6 +52,20 @@ def bartlett_test(df, matrix_selector, group_selector, block_selectors):
     robjects.r.assign("d", block_df)
     result = robjects.r(f"bartlett.test(list(d[,1],d[,2],d[,3]))")
     return as_dict(result)
+
+
+def bartlett(*array_likes):
+    """
+    Test of equality of varience.
+    """
+    return scipy_stats.bartlett(*array_likes)
+
+
+def levene(*array_like, center="median", proportiontocut=0.05):
+    """
+    Robast test fof equality of varience.
+    """
+    return scipy_stats.levene(*array_like, center=center, proportiontocut=proportiontocut)
 
 
 def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
