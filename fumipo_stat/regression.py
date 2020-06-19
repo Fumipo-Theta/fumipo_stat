@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
 base = importr('base')
@@ -7,6 +8,9 @@ importr("glm2")
 from functools import reduce
 import re
 
+from .exhaustive_regression import quote_term, Predictor, intercept_to_value,\
+    single_term_to_value, double_term_to_value
+
 
 def presentable(func):
     def wrapper(self, presenter=lambda d: d):
@@ -14,30 +18,39 @@ def presentable(func):
     return wrapper
 
 
-def get_variable_names_of_R_poly(express: str):
+def power_to_R_poly(express: str):
+    """
+    variable^2 -> poly(variable, degree=2)
+    """
+    match = re.match(r"^(\w+)\^([\d\.]+)$", express)
+    if match:
+        var = match[1]
+        power = match[2]
+        return f"poly({var}, degree={power})"
+    else:
+        return express
+
+
+def R_poly_to_power(express: str):
     """
     get variable names of polynominal form expressed as R syntax
 
     Example
     -------
-    get_variable_names("poly(param, degree=2)")
-    > ["param_1","param_2"]
-
-    get_variable_names("param")
-    > ["param"]
+    variable                  -> variable
+    variable_2                -> variable_2
+    poly(variable, degree=2)1 -> variable
+    poly(variable, degree=2)2 -> variable^2
     """
 
-    variable = re.search(r"poly\(([\w\d]+),.*\)", express)
-    _degree = re.search(r"poly\(.*\)(\d+)", express)
-    degree = int(_degree.groups()[0]) if _degree else 1
+    match = re.match(r"^poly\((\w+)\,.*\)(\d+)$", express)
 
-    return f"{variable.groups()[0]}_{degree}" if variable else express
-
-
-# assert(get_variable_names_of_R_poly("poly(param,degree=2)")
-#       == ["param_1", "param_2"])
-# assert(get_variable_names_of_R_poly("param")
-#       == ["param"])
+    if match:
+        var = match[1]
+        power = int(match[2])
+        return f"{var}^{power}" if power != 1 else var
+    else:
+        return express
 
 
 def count_degree(express):
@@ -133,7 +146,7 @@ class LMResult(IRegressionModelResult):
 
     def get_variables(self):
         coeff_matrix = self.get_summary_section(3, None)
-        variables = list(map(get_variable_names_of_R_poly,
+        variables = list(map(R_poly_to_power,
                              coeff_matrix.names[0])) if coeff_matrix is not None else []
         return variables
 
@@ -174,7 +187,7 @@ class GLM2Result(IRegressionModelResult):
         # In the case, self.get_summary_section(10, None) will be (omit,)
         # , and self.get_summary_section(12, None) is coeff_matrix
         coeff_matrix = self.get_summary_section(11, None)
-        names = list(map(get_variable_names_of_R_poly,
+        names = list(map(R_poly_to_power,
                          coeff_matrix.names[0])) if coeff_matrix is not None else []
         return names
 
@@ -260,7 +273,7 @@ class LM(IRegressionModel):
 
     def set_formula(self, y, xs):
         expression = reduce(lambda acc, e: acc+"+" +
-                            e if acc != "" else e, xs, "")
+                            e if acc != "" else e, map(power_to_R_poly, xs), "")
         formula = f"{y}~{expression}"
         self.formula = formula
 
@@ -310,7 +323,7 @@ class GLM2(IRegressionModel):
 
     def set_formula(self, y, xs):
         expression = reduce(lambda acc, e: acc+"+" +
-                            e if acc != "" else e, xs, "")
+                            e if acc != "" else e, map(power_to_R_poly, xs), "")
         formula = f"{y}~{expression}"
         self.formula = formula
 
@@ -344,3 +357,25 @@ class GLM2(IRegressionModel):
 
             return self.Result(
                 None, y, self.discript_model()+f"\n{e}")
+
+    @staticmethod
+    def Predictor(glm_result: GLM2Result, p_limit: float, scalers):
+        estimated = pd.DataFrame(glm_result.coeff().as_dict()).reset_index()
+
+        valid = estimated[estimated["Pr(>|t|)"] < p_limit]
+
+        terms = []
+        raw_terms = []
+        for i, row in valid.iterrows():
+            term = quote_term(row["index"])
+            coeff = row["Estimate"]
+            raw_terms.append((row["index"], coeff))
+
+            if term[0][1][0] == "(Intercept)":
+                terms.append(intercept_to_value(term, coeff, scalers))
+            elif len(term) == 1:
+                terms.append(single_term_to_value(term, coeff, scalers))
+            elif len(term) == 2:
+                terms.append(double_term_to_value(term, coeff, scalers))
+
+        return Predictor(terms, raw_terms)

@@ -1,6 +1,103 @@
 import pandas as pd
 import numpy as np
 from func_helper import pip
+import re
+from functools import reduce
+
+
+def has_scaled(term: str):
+    return term[0].islower()
+
+
+def before_scaled(scaled_term: str):
+    return scaled_term[0].upper() + scaled_term[1:]
+
+
+def quote_poly_term(term: str):
+    """
+    variable^2 -> (variable, 2)
+    """
+    match = re.match(r"^(\w+)\^(\d+)$", term)
+    if match:
+        return (match[1], int(match[2]))
+    else:
+        return (term, 1)
+
+
+def quote_interact(term):
+    match = re.match(r"(\w+):(\w+)", term)
+    if match:
+        return (True, match)
+    else:
+        return (False, term)
+
+
+def quote_scaled(term: str):
+    """
+    If variable name start with upper case, the term is determined as original.
+    Else, the term is determined to should be scaled.
+
+    Example
+    -------
+    quote_scaled("Original") -> (False, ("Original", 1))
+    quote_scaled("scaled")   -> (True,  ("Scaled", 1))
+    quote_scaled("Var^2)     -> (False, ("Var", 2))
+
+    """
+    if has_scaled(term):
+        return (True, quote_poly_term(before_scaled(term)))
+    else:
+        return (False, quote_poly_term(term))
+
+
+def quote_term(term: str):
+    (interact, interact_term) = quote_interact(term)
+    if interact:
+        term_1 = quote_scaled(interact_term[1])
+        term_2 = quote_scaled(interact_term[2])
+        return [term_1, term_2]
+    else:
+        return [quote_scaled(term)]
+
+
+def single_term_to_value(maybe_scaled, coeff, scale_funcs):
+    is_scaled, (key, power) = maybe_scaled[0]
+    if is_scaled:
+        if key not in scale_funcs:
+            raise KeyError(f"{key} is not in scale_funcs")
+        return lambda **kwargs: coeff * (scale_funcs.get(key)(kwargs.get(key)))**power
+    else:
+        return lambda **kwargs: coeff * kwargs.get(key) ** power
+
+
+def double_term_to_value(maybe_scaled, coeff, scale_funcs):
+    [(term1_is_scaled, (key1, power1)),
+     (term2_is_scaled, (key2, power2))] = maybe_scaled
+
+    if term1_is_scaled & term2_is_scaled:
+        return lambda **kwargs: coeff * (
+            ((scale_funcs.get(key1)(kwargs.get(key1))) ** power1)
+            * ((scale_funcs.get(key2)(kwargs.get(key2))) ** power2)
+        )
+    elif term1_is_scaled:
+        return lambda **kwargs: coeff * (
+            ((scale_funcs.get(kwargs.get(key1))(kwargs.get(key1)))**power1)
+            * (kwargs.get(key2)**power2)
+        )
+    elif term2_is_scaled:
+        return lambda **kwargs: coeff * (
+            (kwargs.get(key1)**power1)
+            * (scale_funcs.get(kwargs.get(key2))(kwargs.get(key2))**power2)
+        )
+    else:
+        return lambda **kwargs: coeff * (
+            (kwargs.get(key1)**power1)
+            * (kwargs.get(key2)**power2)
+        )
+
+
+def intercept_to_value(just_intercept, coeff, _):
+    return lambda **kwargs: coeff
 
 
 def glm_with(model_generator, all_variables):
@@ -98,6 +195,30 @@ class ExhaustiveResult:
         return model
 
 
+class Predictor:
+    def __init__(self, terms, expressions):
+        self.terms = terms
+        self.expressions = expressions
+
+    def __repr__(self):
+        return "y ~ " + reduce(
+            lambda acc, e: acc + self.__construct_term_expression(e) + "\n",
+            self.expressions,
+            ""
+        )
+
+    def predict(self, **kwargs):
+        return reduce(lambda acc, f: acc + f(**kwargs), self.terms, 0)
+
+    def __construct_term_expression(self, expression):
+        name, coeff = expression
+
+        if coeff > 0:
+            return f"+ {coeff} {name} "
+        else:
+            return f"- {coeff*-1} {name} "
+
+
 class ExhaustiveRegression:
     """
     Class for perform exhaustive combination of variables.
@@ -122,3 +243,64 @@ class ExhaustiveRegression:
             columns=[*all_vars, "AIC", "R2", "coeff"]
         )
         return ExhaustiveResult(models, all_vars)
+
+    @staticmethod
+    def Predictor(estimated, probability_limit, vias_limit, scalers):
+        """
+        Generate predicting function automatically from exhaustive GLM.
+
+
+        Usage
+        -----
+        estimated = ExhaustiveModel(...).generate_confidential_set(...).get_estimate(...)
+        predictor = ExhaustiveModel.Predictor(estimated, probability_limit, vias_limit, scale_func_dict)
+        predictor.predict(Var1=0.5, Var2=1, ...)
+
+
+        Parameters
+        ----------
+        estimated: pd.DataFrame
+            columns: [variable, estimate, se, probability, vias]
+        probability_limit: float
+            probability >= limit variables are selected.
+        vias_limit: float
+            vias < limit valiables are selected
+        scalers: dict
+            keys: Original_variable_name (must start from upper case)
+            values: scaling function
+
+
+        Returns
+        -------
+        When the valid model is y ~ a VarA + b VarB + c varC + de VarD:VarE, 
+
+        Predictor.predict() function equivalent to: 
+
+        def f(VarA, VarB, VarC, VarD, VarE):
+            return (
+                Intercept
+                + a * VarA
+                + b * VarB
+                + c * scale_C(VarC)
+                + de * scale_D(VarD) * scale_E(VarE)
+            )
+
+        """
+        valid = estimated[(estimated["probability"] >= probability_limit) & (
+            estimated["vias"] < vias_limit)]
+
+        terms = []
+        raw_terms = []
+        for i, row in valid.iterrows():
+            term = quote_term(row["variable"])
+            coeff = row["estimate"]
+            raw_terms.append((row["variable"], coeff))
+
+            if term[0][1][0] == "(Intercept)":
+                terms.append(intercept_to_value(term, coeff, scalers))
+            elif len(term) == 1:
+                terms.append(single_term_to_value(term, coeff, scalers))
+            elif len(term) == 2:
+                terms.append(double_term_to_value(term, coeff, scalers))
+
+        return Predictor(terms, raw_terms)
