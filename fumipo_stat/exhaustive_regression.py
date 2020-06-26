@@ -173,10 +173,55 @@ def get_estimate_statistics(df, var_name, presenter):
     return presenter(var_name, estimate, se, p, vias)
 
 
+class Predictor:
+    def __init__(self, terms, expressions, *, disc: str=""):
+        self.terms = terms
+        self.expressions = expressions
+        self.discription = disc
+
+    def __repr__(self):
+
+        formula = reduce(
+            lambda acc, e: acc + self.__construct_term_expression(e) + "\n",
+            self.expressions,
+            ""
+        )
+
+        return (
+            f"{self.discription}\n" +
+            "\n" +
+            "Model\n" +
+            "--------\n" +
+            "y ~ \n" +
+            f"{formula}"
+        )
+
+    def predict(self, **kwargs):
+        return reduce(lambda acc, f: acc + f(**kwargs), self.terms, 0)
+
+    def __construct_term_expression(self, expression):
+        name, coeff = expression
+
+        if coeff > 0:
+            return f"+ {coeff} {name} "
+        else:
+            return f"- {coeff*-1} {name} "
+
+
 class ExhaustiveResult:
-    def __init__(self, result_df, variables):
+    def __init__(self, result_df, variables, model_discript):
         self.models = result_df
         self.variables = variables
+        self.model_discript = model_discript
+
+    def __repr__(self):
+        return (
+            self.model_discript + "\n" +
+            "\n" +
+            "Full model parameters\n" +
+            "--------------\n" +
+            f"{self.variables}"
+        )
 
     def get_confidential_set(self, dAIC_threshold):
         return pip(
@@ -194,58 +239,7 @@ class ExhaustiveResult:
         )
         return model
 
-
-class Predictor:
-    def __init__(self, terms, expressions):
-        self.terms = terms
-        self.expressions = expressions
-
-    def __repr__(self):
-        return "y ~ " + reduce(
-            lambda acc, e: acc + self.__construct_term_expression(e) + "\n",
-            self.expressions,
-            ""
-        )
-
-    def predict(self, **kwargs):
-        return reduce(lambda acc, f: acc + f(**kwargs), self.terms, 0)
-
-    def __construct_term_expression(self, expression):
-        name, coeff = expression
-
-        if coeff > 0:
-            return f"+ {coeff} {name} "
-        else:
-            return f"- {coeff*-1} {name} "
-
-
-class ExhaustiveRegression:
-    """
-    Class for perform exhaustive combination of variables.
-    """
-
-    def __init__(self, stat_model, SubsetCls):
-        """
-        stat_model: IRegressionModel
-        SubsetCls:  Subset
-        """
-        self.regression = stat_model
-        self.SubsetBuilder = SubsetCls
-
-    def get_confidential_set(self, df, objective, variables):
-        var_subset = self.SubsetBuilder(variables, drop=False)
-        full_model = self.regression.fit(df, objective, *variables)
-        all_vars = full_model.get_variables()
-
-        models = pd.DataFrame.from_records(
-            map(glm_with(lambda explains: self.regression.fit(
-                df, objective, *explains), all_vars), var_subset),
-            columns=[*all_vars, "AIC", "R2", "coeff"]
-        )
-        return ExhaustiveResult(models, all_vars)
-
-    @staticmethod
-    def Predictor(estimated, probability_limit, vias_limit, scalers):
+    def Predictor(self, dAIC_threshold, probability_limit, vias_limit, scalers, disc="") -> Predictor:
         """
         Generate predicting function automatically from exhaustive GLM.
 
@@ -254,7 +248,7 @@ class ExhaustiveRegression:
         -----
         estimated = ExhaustiveModel(...).generate_confidential_set(...).get_estimate(...)
         predictor = ExhaustiveModel.Predictor(estimated, probability_limit, vias_limit, scale_func_dict)
-        predictor.predict(Var1=0.5, Var2=1, ...)
+        predictor.predict(VarA=0.5, VarB=1, ...)
 
 
         Parameters
@@ -286,6 +280,8 @@ class ExhaustiveRegression:
             )
 
         """
+        estimated = self.get_estimate(dAIC_threshold)
+
         valid = estimated[(estimated["probability"] >= probability_limit) & (
             estimated["vias"] < vias_limit)]
 
@@ -303,4 +299,45 @@ class ExhaustiveRegression:
             elif len(term) == 2:
                 terms.append(double_term_to_value(term, coeff, scalers))
 
-        return Predictor(terms, raw_terms)
+        _disc = (
+            disc + "\n" +
+            f"Select confidential set by\n" +
+            f"dAIC < {dAIC_threshold}\n" +
+            f"probability >= {probability_limit}\n" +
+            f"vias < {vias_limit}\n"
+        )
+
+        return Predictor(terms, raw_terms, disc=repr(self) + "\n" + _disc)
+
+
+class ExhaustiveRegression:
+    """
+    Class for perform exhaustive combination of variables.
+    """
+
+    def __init__(self, stat_model, SubsetCls):
+        """
+        stat_model: IRegressionModel
+        SubsetCls:  Subset
+        """
+        self.regression = stat_model
+        self.SubsetBuilder = SubsetCls
+
+    def __repr__(self):
+        return (
+            "Exhaustive method\n" +
+            f"Modeled by \n" +
+            repr(self.regression)
+        )
+
+    def get_confidential_set(self, df, objective, variables):
+        var_subset = self.SubsetBuilder(variables, drop=False)
+        full_model = self.regression.fit(df, objective, *variables)
+        all_vars = full_model.get_variables()
+
+        models = pd.DataFrame.from_records(
+            map(glm_with(lambda explains: self.regression.fit(
+                df, objective, *explains), all_vars), var_subset),
+            columns=[*all_vars, "AIC", "R2", "coeff"]
+        )
+        return ExhaustiveResult(models, all_vars, repr(self))

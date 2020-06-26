@@ -229,6 +229,57 @@ class GLM2Result(IRegressionModelResult):
     def psuedo_r_squared(self):
         return (1-self.residual_deviance()/self.null_deviance())
 
+    def Predictor(self, p_limit: float, scalers, disc="") -> Predictor:
+        """
+        Generate predicting function automatically from GLM.
+
+
+        Usage
+        -----
+
+
+        Returns
+        -------
+        When the model is y ~ a VarA + b VarB + c varC + de VarD:VarE, 
+
+        Predictor.predict() function equivalent to: 
+
+        def f(VarA, VarB, VarC, VarD, VarE):
+            return (
+                Intercept
+                + a * VarA
+                + b * VarB
+                + c * scale_C(VarC)
+                + de * scale_D(VarD) * scale_E(VarE)
+            )
+        """
+
+        estimated = pd.DataFrame(self.coeff().as_dict()).reset_index()
+
+        valid = estimated[estimated["Pr(>|t|)"] < p_limit]
+
+        terms = []
+        raw_terms = []
+        for i, row in valid.iterrows():
+            term = quote_term(row["index"])
+            coeff = row["Estimate"]
+            raw_terms.append((row["index"], coeff))
+
+            if term[0][1][0] == "(Intercept)":
+                terms.append(intercept_to_value(term, coeff, scalers))
+            elif len(term) == 1:
+                terms.append(single_term_to_value(term, coeff, scalers))
+            elif len(term) == 2:
+                terms.append(double_term_to_value(term, coeff, scalers))
+
+        _disc = (
+            disc + "\n" +
+            f"Model parameters selected by\n" +
+            f"p-value < {p_limit}\n"
+        )
+
+        return Predictor(terms, raw_terms, disc=repr(self) + "\n" + _disc)
+
 
 class PrettyNamedMatrix:
     def __init__(self, matrix, colnames=None, rownames=None):
@@ -357,25 +408,3 @@ class GLM2(IRegressionModel):
 
             return self.Result(
                 None, y, self.discript_model()+f"\n{e}")
-
-    @staticmethod
-    def Predictor(glm_result: GLM2Result, p_limit: float, scalers):
-        estimated = pd.DataFrame(glm_result.coeff().as_dict()).reset_index()
-
-        valid = estimated[estimated["Pr(>|t|)"] < p_limit]
-
-        terms = []
-        raw_terms = []
-        for i, row in valid.iterrows():
-            term = quote_term(row["index"])
-            coeff = row["Estimate"]
-            raw_terms.append((row["index"], coeff))
-
-            if term[0][1][0] == "(Intercept)":
-                terms.append(intercept_to_value(term, coeff, scalers))
-            elif len(term) == 1:
-                terms.append(single_term_to_value(term, coeff, scalers))
-            elif len(term) == 2:
-                terms.append(double_term_to_value(term, coeff, scalers))
-
-        return Predictor(terms, raw_terms)
