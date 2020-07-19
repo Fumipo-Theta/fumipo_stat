@@ -170,6 +170,57 @@ class LMResult(IRegressionModelResult):
     def r_sqared(self):
         return self.r_squared()
 
+    def Predictor(self, p_limit: float, scalers, disc="") -> Predictor:
+        """
+        Generate predicting function automatically from GLM.
+
+
+        Usage
+        -----
+
+
+        Returns
+        -------
+        When the model is y ~ a VarA + b VarB + c varC + de VarD:VarE, 
+
+        Predictor.predict() function equivalent to: 
+
+        def f(VarA, VarB, VarC, VarD, VarE):
+            return (
+                Intercept
+                + a * VarA
+                + b * VarB
+                + c * scale_C(VarC)
+                + de * scale_D(VarD) * scale_E(VarE)
+            )
+        """
+
+        estimated = pd.DataFrame(self.coeff().as_dict()).reset_index()
+
+        valid = estimated[estimated["Pr(>|t|)"] < p_limit]
+
+        terms = []
+        raw_terms = []
+        for i, row in valid.iterrows():
+            term = quote_term(row["index"])
+            coeff = row["Estimate"]
+            raw_terms.append((row["index"], coeff))
+
+            if term[0][1][0] == "(Intercept)":
+                terms.append(intercept_to_value(term, coeff, scalers))
+            elif len(term) == 1:
+                terms.append(single_term_to_value(term, coeff, scalers))
+            elif len(term) == 2:
+                terms.append(double_term_to_value(term, coeff, scalers))
+
+        _disc = (
+            disc + "\n" +
+            f"Model parameters selected by\n" +
+            f"p-value < {p_limit}\n"
+        )
+
+        return Predictor(terms, raw_terms, disc=repr(self) + "\n" + _disc)
+
 
 class GLM2Result(IRegressionModelResult):
     def __init__(self,
