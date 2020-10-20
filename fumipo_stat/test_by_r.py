@@ -1,17 +1,22 @@
+import dataclasses
+from .r_to_py import as_dict
+import dataframe_helper as dataframe
 from scipy import stats as scipy_stats
 import numpy as np
 import rpy2.robjects as robjects
-from rpy2.robjects.packages import importr
+from rpy2.robjects.packages import data, importr
 from rpy2.robjects import pandas2ri, numpy2ri
 pandas2ri.activate()
 numpy2ri.activate()
-import dataframe_helper as dataframe
-from .r_to_py import as_dict
-import dataclasses
 
 
 def ANOVA(*array_likes):
     return scipy_stats.f_oneway(*array_likes)
+
+
+@dataclasses.dataclass()
+class PairwiseTResult:
+    pvalue: float
 
 
 @dataclasses.dataclass()
@@ -40,6 +45,16 @@ def shapiro_test(array_like):
         return InvalidResult(None, None)
 
     return ShapiroResult(*scipy_stats.shapiro(array_like))
+
+
+def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
+    value = np.array([x for x in array1] + [x for x in array2])
+    group = np.array([0 for _ in array1] + [1 for _ in array2])
+    robjects.r.assign("d", value)
+    robjects.r.assign("g", group)
+    result = as_dict(robjects.r(
+        f"pairwise.t.test(d, g, p.adj='{method}', pool.sd={'T' if equal_var else 'F'})"))
+    return PairwiseTResult(pvalue=result["p.value"])
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
