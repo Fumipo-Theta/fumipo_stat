@@ -3,11 +3,13 @@ from .r_to_py import as_dict
 import dataframe_helper as dataframe
 from scipy import stats as scipy_stats
 import numpy as np
+import scikit_posthocs as sp
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import data, importr
 from rpy2.robjects import pandas2ri, numpy2ri
 pandas2ri.activate()
 numpy2ri.activate()
+importr("multcomp")
 
 
 def ANOVA(*array_likes):
@@ -115,3 +117,48 @@ def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray):
     )
     result_dict = as_dict(result)
     return result_dict
+
+
+def tukey_hsd(df, x, y):
+    _df = df[[x, y]]
+    _df[x] = _df[x].astype("category")
+    robjects.r.assign("d", _df)
+    robjects.r(f"aov_res <- aov({y}~{x}, d)")
+    robjects.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
+    return robjects.r("cld(tuk, decreasing=T)")
+
+
+def steel_dwass(df, x, y, **kwargs):
+    """
+    TukeyHSD のノンパラメトリック版
+    """
+    return sp.posthoc_dscf(df, val_col=y, group_col=x, **kwargs)
+
+
+def cld(significance, labels):
+    """
+    https://qiita.com/TomosurebaOrange/items/c28fc9cae922f3c21e08
+    """
+    import networkx as nx
+
+    # 有意差のないものを 1 とする
+    mat = (significance > 0.05)
+
+    V = nx.from_numpy_matrix(mat)
+    G = nx.Graph(V)
+
+    # クリーク辺被覆問題を解き，同じ文字を与えるべきクリーク集合を得る
+    cliques = nx.find_cliques(G)
+
+    # 各クリーク集合の要素について，同一の文字列ラベルを与える
+    cld_dict = {i: [] for i in labels}
+    label_table = {i: l for i, l in enumerate(labels)}
+    for i, clique in enumerate(cliques):
+        letter = chr(i + 97)
+        for j in clique:
+            cld_dict[label_table[j]].append(letter)
+
+    for i in cld_dict:
+        cld_dict[i] = ''.join(cld_dict[i])
+
+    return cld_dict
