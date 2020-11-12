@@ -49,6 +49,13 @@ def shapiro_test(array_like):
     return ShapiroResult(*scipy_stats.shapiro(array_like))
 
 
+def t_test(array1, array2, equal_var=True):
+    """
+    If arrays are not equivarient, this do Welch's t test.
+    """
+    return scipy_stats.ttest_ind(array1, array2, equal_var=equal_var)
+
+
 def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
     value = np.array([x for x in array1] + [x for x in array2])
     group = np.array([0 for _ in array1] + [1 for _ in array2])
