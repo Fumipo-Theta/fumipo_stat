@@ -111,7 +111,13 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
     return result_dict
 
 
-def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray):
+@dataclasses.dataclass()
+class WilcoxonRankSumTestResult:
+    statistics: float
+    pvalue: float
+
+
+def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray, raw=False):
     """
     ノンパラメトリックな代表値比較の検定
 
@@ -123,7 +129,10 @@ def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray):
         f"wilcox.test(x, y)"
     )
     result_dict = as_dict(result)
-    return result_dict
+    if raw:
+        return result_dict
+    else:
+        return WilcoxonRankSumTestResult(result_dict["statistic"], result_dict["p.value"])
 
 
 def tukey_hsd(df, x, y):
@@ -169,3 +178,44 @@ def cld(significance, labels):
         cld_dict[i] = ''.join(cld_dict[i])
 
     return cld_dict
+
+
+def compare_test_suite(x, y, paired, presenter=print):
+    x_shapiro = shapiro_test(x)
+    y_shapiro = shapiro_test(y)
+    are_normal_dist = x_shapiro.pvalue > 0.05 and y_shapiro.pvalue > 0.05
+
+    equal_var_test = bartlett(
+        x, y) if are_normal_dist else levene(x.values, y.values)
+    are_equal_var = equal_var_test.pvalue <= 0.05
+
+    if paired:
+        if are_normal_dist and are_equal_var:
+            presenter("are normal distribution and equal variance")
+            exam_result = pairwise_t_test(x, y, True)
+        elif are_normal_dist:
+            presenter("are normal distribution but not equal variance")
+            exam_result = pairwise_t_test(x, y, False)
+        else:
+            presenter("are not normal distribution and not equal variance")
+            exam_result = scipy_stats.wilcoxon(x, y)
+    else:
+        if are_normal_dist and are_equal_var:
+            presenter("are normal distribution and equal variance")
+            exam_result = t_test(x, y, True)
+        elif are_normal_dist:
+            presenter("are normal distribution but not equal variance")
+            exam_result = t_test(x, y, False)
+        else:
+            presenter("are not normal distribution and not equal variance")
+            exam_result = wilcoxon_rank_sum_test(x, y)
+
+    if exam_result.pvalue <= 0.05:
+        label = '**Maybe significant**'
+        is_significant = True
+    else:
+        label = 'Not significant'
+        is_significant = False
+
+    presenter(f"{label} [{exam_result}]")
+    return is_significant
