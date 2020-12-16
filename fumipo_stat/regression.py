@@ -1,3 +1,7 @@
+from .exhaustive_regression import quote_term, Predictor, intercept_to_value,\
+    single_term_to_value, double_term_to_value
+import re
+from functools import reduce
 import numpy as np
 import pandas as pd
 import rpy2.robjects as robjects
@@ -5,11 +9,6 @@ from rpy2.robjects.packages import importr
 base = importr('base')
 importr("multcomp")
 importr("glm2")
-from functools import reduce
-import re
-
-from .exhaustive_regression import quote_term, Predictor, intercept_to_value,\
-    single_term_to_value, double_term_to_value
 
 
 def presentable(func):
@@ -109,10 +108,10 @@ class IRegressionModel:
     def __new__(cls, *arg, **kwargs):
         return super().__new__(cls)
 
-    def fit(self)->IRegressionModelResult:
+    def fit(self) -> IRegressionModelResult:
         pass
 
-    def discript_model(self)->str:
+    def discript_model(self) -> str:
         pass
 
 
@@ -381,7 +380,7 @@ class LM(IRegressionModel):
 
     def set_fit_kwargs(self, kwargs):
         self.call_kwargs = reduce(
-            lambda acc, e: acc+","+e if acc is not "" else e,
+            lambda acc, e: acc+","+e if acc != "" else e,
             [f"{key}={value}" for key, value in kwargs.items()],
             "")
 
@@ -390,7 +389,7 @@ class LM(IRegressionModel):
 
     def fit(self, df, y, *xs, **lm_kwargs):
 
-        if len(xs) is 0:
+        if len(xs) == 0:
             raise Exception("At least 1 predicative variable required.")
 
         self.set_formula(y, xs)
@@ -431,7 +430,7 @@ class GLM2(IRegressionModel):
 
     def set_fit_kwargs(self, kwargs):
         self.call_kwargs = reduce(
-            lambda acc, e: acc+","+e if acc is not "" else e,
+            lambda acc, e: acc+","+e if acc != "" else e,
             [f"{key}={value}" for key, value in kwargs.items()],
             "")
 
@@ -440,7 +439,7 @@ class GLM2(IRegressionModel):
 
     def fit(self, df, y, *xs, **glm_kwargs):
 
-        if len(xs) is 0:
+        if len(xs) == 0:
             raise Exception("At least 1 predicative variable required.")
 
         self.set_formula(y, xs)
