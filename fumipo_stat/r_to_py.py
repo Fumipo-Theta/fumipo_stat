@@ -10,8 +10,6 @@ def as_dict(vector):
     for i, name in enumerate(vector.names):
         if isinstance(vector[i], robjects.ListVector):
             result[name] = as_dict(vector[i])
-        elif isinstance(vector[i], rpy2.rinterface.RNULLType):
-            result[name] = "Null"
         elif len(vector[i]) == 1:
             result[name] = vector[i][0]
         else:
@@ -32,6 +30,6 @@ def r_matrix_to_table(r_mat, td_hook=lambda v: v):
     body = ""
     for hr, tds in zip(row, values):
         body += f"|{hr}" + reduce(lambda acc,
-                                  e: f"{acc}{td_hook(e)(e)}|", tds, "|")+"\n"
+                                  e: f"{acc}{td_hook(e)(e)}|", tds, "|") + "\n"
 
     return f"{header}\n{align}\n{body}"
