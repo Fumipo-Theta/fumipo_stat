@@ -10,6 +10,8 @@ def as_dict(vector):
     for i, name in enumerate(vector.names):
         if isinstance(vector[i], robjects.ListVector):
             result[name] = as_dict(vector[i])
+        elif isinstance(vector[i], rpy2.rinterface.NULLType):
+            result[name] = "Null"
         elif len(vector[i]) == 1:
             result[name] = vector[i][0]
         else:
