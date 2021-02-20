@@ -3,6 +3,7 @@ from .r_to_py import as_dict
 import dataframe_helper as dataframe
 from scipy import stats as scipy_stats
 import numpy as np
+import pandas as pd
 import scikit_posthocs as sp
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import data, importr
@@ -181,6 +182,11 @@ def cld(significance, labels):
 
 
 def compare_test_suite(x, y, paired, presenter=print):
+    if len(x) < 3 or len(y) < 3:
+        presenter(
+            f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
+        return False
+
     x_shapiro = shapiro_test(x)
     y_shapiro = shapiro_test(y)
     are_normal_dist = x_shapiro.pvalue > 0.05 and y_shapiro.pvalue > 0.05
@@ -219,3 +225,12 @@ def compare_test_suite(x, y, paired, presenter=print):
 
     presenter(f"{label} [{exam_result}]")
     return is_significant
+
+
+def basic_stat(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
+    return pd.DataFrame({
+        "mean": map(lambda s: s.mean(), xs),
+        "median": map(lambda s: s.median(), xs),
+        "std": map(lambda s: s.std(), xs),
+        "count": map(lambda s: s.count(), xs)
+    }, index=names)
