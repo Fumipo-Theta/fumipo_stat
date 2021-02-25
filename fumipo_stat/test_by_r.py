@@ -181,11 +181,21 @@ def cld(significance, labels):
     return cld_dict
 
 
-def compare_test_suite(x, y, paired, presenter=print):
+def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
     if len(x) < 3 or len(y) < 3:
         presenter(
             f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
         return False
+
+    def which_is_larger(left, right, method):
+        l = method(left)
+        r = method(right)
+        if l == r:
+            return "equal"
+        elif l > r:
+            return "left"
+        else:
+            return "right"
 
     x_shapiro = shapiro_test(x)
     y_shapiro = shapiro_test(y)
@@ -196,25 +206,33 @@ def compare_test_suite(x, y, paired, presenter=print):
     are_equal_var = equal_var_test.pvalue <= 0.05
 
     if paired:
+        presenter("Paired test")
         if are_normal_dist and are_equal_var:
             presenter("are normal distribution and equal variance")
             exam_result = pairwise_t_test(x, y, True)
+            larger = which_is_larger(x, y, np.mean)
         elif are_normal_dist:
             presenter("are normal distribution but not equal variance")
             exam_result = pairwise_t_test(x, y, False)
+            larger = which_is_larger(x, y, np.mean)
         else:
             presenter("are not normal distribution and not equal variance")
             exam_result = scipy_stats.wilcoxon(x, y)
+            larger = which_is_larger(x, y, np.median)
     else:
+        presenter("Individual test")
         if are_normal_dist and are_equal_var:
             presenter("are normal distribution and equal variance")
             exam_result = t_test(x, y, True)
+            larger = which_is_larger(x, y, np.mean)
         elif are_normal_dist:
             presenter("are normal distribution but not equal variance")
             exam_result = t_test(x, y, False)
+            larger = which_is_larger(x, y, np.mean)
         else:
             presenter("are not normal distribution and not equal variance")
             exam_result = wilcoxon_rank_sum_test(x, y)
+            larger = which_is_larger(x, y, np.median)
 
     if exam_result.pvalue <= 0.05:
         label = '**Maybe significant**'
@@ -224,7 +242,10 @@ def compare_test_suite(x, y, paired, presenter=print):
         is_significant = False
 
     presenter(f"{label} [{exam_result}]")
-    return is_significant
+    if with_larger:
+        return (is_significant, larger)
+    else:
+        return is_significant
 
 
 def basic_stat(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
