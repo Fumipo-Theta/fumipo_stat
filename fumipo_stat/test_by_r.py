@@ -88,7 +88,9 @@ def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
         f"t.test(a1, a2, var.equal={'T' if equal_var else 'F'})"
     ))
 
-    return PairwiseTResult(meta["statistic"], result["p.value"][0], meta["parameter"])
+    dof = len(value) / 2 - 1
+
+    return PairwiseTResult(meta["statistic"], result["p.value"][0], dof)
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
