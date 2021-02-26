@@ -18,8 +18,17 @@ def ANOVA(*array_likes):
 
 
 @dataclasses.dataclass()
-class PairwiseTResult:
+class TTestIndResult:
+    statistics: float
     pvalue: float
+    dof: float
+
+
+@dataclasses.dataclass()
+class PairwiseTResult:
+    statistics: float
+    pvalue: float
+    dof: float
 
 
 @dataclasses.dataclass()
@@ -54,17 +63,32 @@ def t_test(array1, array2, equal_var=True):
     """
     If arrays are not equivarient, this do Welch's t test.
     """
-    return scipy_stats.ttest_ind(array1, array2, equal_var=equal_var)
+    robjects.r.assign("a1", array1)
+    robjects.r.assign("a2", array2)
+    result = as_dict(robjects.r(
+        f"t.test(a1, a2, var.equal={'T' if equal_var else 'F'})"
+    ))
+    return TTestIndResult(result["statistic"], result["p.value"], result["parameter"])
 
 
 def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
+    """
+    two-sided.
+    """
     value = np.array([x for x in array1] + [x for x in array2])
-    group = np.array([0 for _ in array1] + [1 for _ in array2])
+    group = np.array([1 for _ in array1] + [2 for _ in array2])
     robjects.r.assign("d", value)
     robjects.r.assign("g", group)
     result = as_dict(robjects.r(
         f"pairwise.t.test(d, g, p.adj='{method}', pool.sd={'T' if equal_var else 'F'})"))
-    return PairwiseTResult(pvalue=result["p.value"])
+
+    robjects.r.assign("a1", array1)
+    robjects.r.assign("a2", array2)
+    meta = as_dict(robjects.r(
+        f"t.test(a1, a2, var.equal={'T' if equal_var else 'F'})"
+    ))
+
+    return PairwiseTResult(meta["statistic"], result["p.value"][0], meta["parameter"])
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
@@ -91,6 +115,12 @@ def levene(*array_like, center="median", proportiontocut=0.05):
     Robast test fof equality of varience.
     """
     return scipy_stats.levene(*array_like, center=center, proportiontocut=proportiontocut)
+
+
+@dataclasses.dataclass()
+class WilcoxonSignedRankTestResult:
+    statistics: float
+    pvalue: float
 
 
 def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
@@ -217,7 +247,8 @@ def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
             larger = which_is_larger(x, y, np.mean)
         else:
             presenter("are not normal distribution and not equal variance")
-            exam_result = scipy_stats.wilcoxon(x, y)
+            exam_result = WilcoxonSignedRankTestResult(*scipy_stats.wilcoxon(
+                x, y))
             larger = which_is_larger(x, y, np.median)
     else:
         presenter("Individual test")
