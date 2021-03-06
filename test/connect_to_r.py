@@ -65,12 +65,13 @@ assert list(base.summary(result).rx(4)[0].rownames) == ["(Intercept)", "x"]
 py2r("xx", np.array([0, 1, 2, 3, 4]))
 py2r("yy", np.array([0, 1, 0, 2, 3]))
 
-result = ro.r("lm(yy~xx)")
+result = ro.r("lm(yy~poly(xx, degree=2, raw=T))")
 
 assert list(base.summary(result).rx(4)[0].names.rx2(1)) == [
-    "(Intercept)", "xx"]
+    '(Intercept)', 'poly(xx, degree = 2, raw = T)1', 'poly(xx, degree = 2, raw = T)2']
 assert list(base.summary(result).rx(4)[0].names.rx2(2)) == [
     "Estimate", "Std. Error", "t value", "Pr(>|t|)"]
-assert list(base.summary(result).rx(4)[0].rownames) == ["(Intercept)", "xx"]
+assert list(base.summary(result).rx(4)[0].rownames) == [
+    '(Intercept)', 'poly(xx, degree = 2, raw = T)1', 'poly(xx, degree = 2, raw = T)2']
 
 # %%
