@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
+from .util import py2r
 base = importr('base')
 importr("multcomp")
 importr("glm2")
@@ -76,9 +77,12 @@ class IRegressionModelResult:
     def result(self):
         return self.model_result
 
+    def is_significant(self, threshould: float) -> bool:
+        pass
+
     def get_summary_section(self, index, default=None):
         try:
-            return self.summary()[:][index]
+            return self.summary().rx(index + 1)
         except:
             return default
 
@@ -146,8 +150,14 @@ class LMResult(IRegressionModelResult):
     def get_variables(self):
         coeff_matrix = self.get_summary_section(3, None)
         variables = list(map(R_poly_to_power,
-                             coeff_matrix.names[0])) if coeff_matrix is not None else []
+                             coeff_matrix[0].names[0])) if coeff_matrix is not None else []
         return variables
+
+    def is_significant(self, threshold: float = 0.05, strict: bool = True) -> bool:
+        return all(map(
+            lambda p: p < threshold,
+            self.coeff().as_dict()["Pr(>|t|)"].values()
+        ))
 
     @presentable
     def coeff(self):
@@ -158,7 +168,8 @@ class LMResult(IRegressionModelResult):
             return (PrettyNamedMatrix([[None for __ in range(4)] for _ in range(1)], colnames=range(4), rownames=range(1)))
         else:
             variables = self.get_variables()
-            return (PrettyNamedMatrix(coeff_matrix, rownames=variables))
+            colnames = ["Estimate", "Std. Error", "t value", "Pr(>|t|)"]
+            return (PrettyNamedMatrix(coeff_matrix, colnames=colnames, rownames=variables))
 
     @presentable
     def r_squared(self):
@@ -241,6 +252,12 @@ class GLM2Result(IRegressionModelResult):
                          coeff_matrix.names[0])) if coeff_matrix is not None else []
         return names
 
+    def is_significant(self, threshold: float = 0.05, strict: bool = True) -> bool:
+        return all(map(
+            lambda p: p < threshold,
+            self.coeff().as_dict()["Pr(>|t|)"].values()
+        ))
+
     @presentable
     def coeff(self):
         coeff_matrix = self.get_summary_section(11, None)
@@ -277,7 +294,7 @@ class GLM2Result(IRegressionModelResult):
 
     @presentable
     def psuedo_r_squared(self):
-        return (1-self.residual_deviance()/self.null_deviance())
+        return (1 - self.residual_deviance() / self.null_deviance())
 
     def Predictor(self, p_limit: float, scalers, disc="") -> Predictor:
         """
@@ -373,14 +390,14 @@ class LM(IRegressionModel):
         return f"{self.model_name} model: {self.create_R_call_string()}"
 
     def set_formula(self, y, xs):
-        expression = reduce(lambda acc, e: acc+"+" +
+        expression = reduce(lambda acc, e: acc + "+" +
                             e if acc != "" else e, map(power_to_R_poly, xs), "")
         formula = f"{y}~{expression}"
         self.formula = formula
 
     def set_fit_kwargs(self, kwargs):
         self.call_kwargs = reduce(
-            lambda acc, e: acc+","+e if acc != "" else e,
+            lambda acc, e: acc + "," + e if acc != "" else e,
             [f"{key}={value}" for key, value in kwargs.items()],
             "")
 
@@ -395,7 +412,7 @@ class LM(IRegressionModel):
         self.set_formula(y, xs)
         self.set_fit_kwargs(lm_kwargs)
 
-        robjects.r.assign("d", df)
+        py2r("d", df)
         call_string = self.create_R_call_string()
 
         try:
@@ -407,7 +424,7 @@ class LM(IRegressionModel):
         except Exception as e:
 
             return self.Result(
-                None, y, self.discript_model()+f"\n{e}")
+                None, y, self.discript_model() + f"\n{e}")
 
 
 class GLM2(IRegressionModel):
@@ -423,14 +440,14 @@ class GLM2(IRegressionModel):
             + f"{self.formula}"
 
     def set_formula(self, y, xs):
-        expression = reduce(lambda acc, e: acc+"+" +
+        expression = reduce(lambda acc, e: acc + "+" +
                             e if acc != "" else e, map(power_to_R_poly, xs), "")
         formula = f"{y}~{expression}"
         self.formula = formula
 
     def set_fit_kwargs(self, kwargs):
         self.call_kwargs = reduce(
-            lambda acc, e: acc+","+e if acc != "" else e,
+            lambda acc, e: acc + "," + e if acc != "" else e,
             [f"{key}={value}" for key, value in kwargs.items()],
             "")
 
@@ -445,7 +462,7 @@ class GLM2(IRegressionModel):
         self.set_formula(y, xs)
         self.set_fit_kwargs(glm_kwargs)
 
-        robjects.r.assign("d", df)
+        py2r("d", df)
         call_string = self.create_R_call_string()
 
         try:
@@ -457,4 +474,4 @@ class GLM2(IRegressionModel):
         except Exception as e:
 
             return self.Result(
-                None, y, self.discript_model()+f"\n{e}")
+                None, y, self.discript_model() + f"\n{e}")

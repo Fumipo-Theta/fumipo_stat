@@ -1,15 +1,14 @@
 import dataclasses
 from .r_to_py import as_dict
+from .util import py2r
 import dataframe_helper as dataframe
 from scipy import stats as scipy_stats
 import numpy as np
 import pandas as pd
 import scikit_posthocs as sp
-import rpy2.robjects as robjects
+import rpy2.robjects as ro
 from rpy2.robjects.packages import data, importr
-from rpy2.robjects import pandas2ri, numpy2ri
-pandas2ri.activate()
-numpy2ri.activate()
+
 importr("multcomp")
 
 
@@ -63,9 +62,9 @@ def t_test(array1, array2, equal_var=True):
     """
     If arrays are not equivarient, this do Welch's t test.
     """
-    robjects.r.assign("a1", array1)
-    robjects.r.assign("a2", array2)
-    result = as_dict(robjects.r(
+    py2r("a1", array1)
+    py2r("a2", array2)
+    result = as_dict(ro.r(
         f"t.test(a1, a2, var.equal={'T' if equal_var else 'F'})"
     ))
     return TTestIndResult(result["statistic"], result["p.value"], result["parameter"])
@@ -77,14 +76,14 @@ def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
     """
     value = np.array([x for x in array1] + [x for x in array2])
     group = np.array([1 for _ in array1] + [2 for _ in array2])
-    robjects.r.assign("d", value)
-    robjects.r.assign("g", group)
-    result = as_dict(robjects.r(
+    py2r("d", value)
+    py2r("g", group)
+    result = as_dict(ro.r(
         f"pairwise.t.test(d, g, p.adj='{method}', pool.sd={'T' if equal_var else 'F'})"))
 
-    robjects.r.assign("a1", array1)
-    robjects.r.assign("a2", array2)
-    meta = as_dict(robjects.r(
+    py2r("a1", array1)
+    py2r("a2", array2)
+    meta = as_dict(ro.r(
         f"t.test(a1, a2, var.equal={'T' if equal_var else 'F'})"
     ))
 
@@ -100,8 +99,8 @@ def bartlett_test(df, matrix_selector, group_selector, block_selectors):
     block_df = dataframe.create_complete_block_designed_df(
         matrix_selector, group_selector, block_selectors
     )(df).values
-    robjects.r.assign("d", block_df)
-    result = robjects.r(f"bartlett.test(list(d[,1],d[,2],d[,3]))")
+    py2r("d", block_df)
+    result = ro.r(f"bartlett.test(list(d[,1],d[,2],d[,3]))")
     return as_dict(result)
 
 
@@ -137,8 +136,8 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
     y: str
     paired: bool
     """
-    robjects.r.assign("d", pandas2ri.py2ri(df))
-    result = robjects.r(
+    py2r("d", pandas2ri.py2ri(df))
+    result = ro.r(
         f"pairwise.wilcox.test(d${y},d${group},paired={'T' if paired else 'F'},p.adjust.method='{method}')")
     result_dict = as_dict(result)
     return result_dict
@@ -156,9 +155,9 @@ def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray, raw=False):
 
     x,y 2つのベクトルの中央値が等しいという帰無仮説を検定する.
     """
-    robjects.r.assign("x", x)
-    robjects.r.assign("y", y)
-    result = robjects.r(
+    py2r("x", x)
+    py2r("y", y)
+    result = ro.r(
         f"wilcox.test(x, y)"
     )
     result_dict = as_dict(result)
@@ -171,10 +170,10 @@ def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray, raw=False):
 def tukey_hsd(df, x, y):
     _df = df[[x, y]]
     _df[x] = _df[x].astype("category")
-    robjects.r.assign("d", _df)
-    robjects.r(f"aov_res <- aov({y}~{x}, d)")
-    robjects.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
-    return robjects.r("cld(tuk, decreasing=T)")
+    py2r("d", _df)
+    ro.r(f"aov_res <- aov({y}~{x}, d)")
+    ro.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
+    return ro.r("cld(tuk, decreasing=T)")
 
 
 def steel_dwass(df, x, y, **kwargs):
