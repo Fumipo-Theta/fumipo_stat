@@ -89,7 +89,7 @@ def pairwise_t_test(array1, array2, equal_var=True, method="bonf"):
 
     dof = len(value) / 2 - 1
 
-    return PairwiseTResult(meta["statistic"], result["p.value"][0], dof)
+    return PairwiseTResult(meta["statistic"], result["p.value"], dof)
 
 
 def bartlett_test(df, matrix_selector, group_selector, block_selectors):
@@ -216,13 +216,16 @@ def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
     if len(x) < 3 or len(y) < 3:
         presenter(
             f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
-        return False
+        if with_larger:
+            return (False, None)
+        else:
+            return False
 
     def which_is_larger(left, right, method):
         l = method(left)
         r = method(right)
         if l == r:
-            return "equal"
+            return None
         elif l > r:
             return "left"
         else:
