@@ -1,3 +1,4 @@
+from __future__ import annotations
 import dataclasses
 from .r_to_py import as_dict
 from .util import py2r
@@ -6,6 +7,7 @@ from scipy import stats as scipy_stats
 import numpy as np
 import pandas as pd
 import scikit_posthocs as sp
+from typing import Literal, Sequence
 import rpy2.robjects as ro
 from rpy2.robjects.packages import data, importr
 
@@ -212,16 +214,80 @@ def cld(significance, labels):
     return cld_dict
 
 
-def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
+def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], presenter=print, p_threshold=0.05):
+    """
+    Premise
+        Data is R compatible.
+        groups is factors which is in df[group_col]
+    """
+
+    _groups = df[group_col].astype(
+        "category").cat.categories if len(groups) == 0 else groups
+    data = df[df[group_col].isin(_groups)]
+
+    def check_normal(df, test_col, group_col, groups, threshold):
+        def is_normal(series):
+            return shapiro_test(series).pvalue > threshold
+        return all(map(is_normal, [df[df[group_col] == group][test_col] for group in groups]))
+
+    def check_equivarient(df, test_col, group_col, groups, threshold):
+        bartlett_res = bartlett(*[
+            df[df[group_col] == group][test_col] for group in groups
+        ])
+        return bartlett_res.pvalue <= threshold
+
+    def parametric_compat(df, test_col, group_col, groups, threshold):
+        are_all_normal = check_normal(
+            df, test_col, group_col, groups, threshold)
+        are_all_equi_var = check_equivarient(
+            df, test_col, group_col, groups, threshold)
+        if are_all_normal and are_all_equi_var:
+            return (True, None)
+        elif are_all_normal:
+            return (False, "not equivarient")
+        elif are_all_equi_var:
+            # 今回はデータサイズ同じなのでパラメトリックでも良い
+            return (True, "not normal")
+        else:
+            return (False, "complex distribution")
+
+    (is_parametric_compat, reason) = parametric_compat(
+        data, test_col, group_col, _groups, p_threshold)
+    if is_parametric_compat:
+        res = ("TukeyHSD", reason, tukey_hsd(data, group_col, test_col))
+    else:
+        _df = data[[test_col, group_col]]
+        _df[test_col] = _df[test_col].apply(lambda v: np.power(v, 0.25))
+        (is_parametric_compat, reason) = parametric_compat(
+            _df, test_col, group_col, _groups, p_threshold)
+        if is_parametric_compat:
+            res = ("TukeyHSD_biquadroot", reason,
+                   tukey_hsd(_df, group_col, test_col))
+        else:
+            __df = _df[[test_col, group_col]]
+            __df[test_col] = __df[test_col].apply(lambda v: np.log(v))
+            (is_parametric_compat, reason) = parametric_compat(
+                __df, test_col, group_col, _groups, p_threshold)
+            if is_parametric_compat:
+                res = ("TukeyHSD_log", reason, tukey_hsd(
+                    __df, group_col, test_col))
+            else:
+                significance = steel_dwass(data, group_col, test_col)
+                res = ("SteelDwass", reason, cld(
+                    significance.values, list(significance.columns)))
+    return res
+
+
+Larger = Literal["left", "right"]
+
+
+def compare_test_suite(x, y, paired, presenter=print, with_larger=False) -> tuple[bool, Larger | None, dict]:
     if len(x) < 3 or len(y) < 3:
         presenter(
             f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
-        if with_larger:
-            return (False, None)
-        else:
-            return False
+        return (False, None, {})
 
-    def which_is_larger(left, right, method):
+    def which_is_larger(left, right, method) -> Larger | None:
         l = method(left)
         r = method(right)
         if l == r:
@@ -241,31 +307,33 @@ def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
 
     if paired:
         presenter("Paired test")
+
         if are_normal_dist and are_equal_var:
-            presenter("are normal distribution and equal variance")
+            note = "are normal distribution and equal variance"
             exam_result = pairwise_t_test(x, y, True)
             larger = which_is_larger(x, y, np.mean)
         elif are_normal_dist:
-            presenter("are normal distribution but not equal variance")
+            note = "are normal distribution but not equal variance"
             exam_result = pairwise_t_test(x, y, False)
             larger = which_is_larger(x, y, np.mean)
         else:
-            presenter("are not normal distribution and not equal variance")
+            note = "are not normal distribution and not equal variance"
             exam_result = WilcoxonSignedRankTestResult(*scipy_stats.wilcoxon(
                 x, y))
             larger = which_is_larger(x, y, np.median)
     else:
         presenter("Individual test")
+
         if are_normal_dist and are_equal_var:
-            presenter("are normal distribution and equal variance")
+            note = "are normal distribution and equal variance"
             exam_result = t_test(x, y, True)
             larger = which_is_larger(x, y, np.mean)
         elif are_normal_dist:
-            presenter("are normal distribution but not equal variance")
+            note = "are normal distribution but not equal variance"
             exam_result = t_test(x, y, False)
             larger = which_is_larger(x, y, np.mean)
         else:
-            presenter("are not normal distribution and not equal variance")
+            note = "are not normal distribution and not equal variance"
             exam_result = wilcoxon_rank_sum_test(x, y)
             larger = which_is_larger(x, y, np.median)
 
@@ -276,11 +344,19 @@ def compare_test_suite(x, y, paired, presenter=print, with_larger=False):
         label = 'Not significant'
         is_significant = False
 
+    result = {
+        "test": exam_result.__class__.__name__,
+        "statistics": exam_result.statistics,
+        "pvalue": exam_result.pvalue,
+        "dof": exam_result.dof if hasattr(exam_result, "dof") else None,
+        "significant": is_significant,
+        "note": f"{label} ({note})",
+    }
+
+    presenter(note)
     presenter(f"{label} [{exam_result}]")
-    if with_larger:
-        return (is_significant, larger)
-    else:
-        return is_significant
+
+    return (is_significant, larger, result)
 
 
 def basic_stat(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
