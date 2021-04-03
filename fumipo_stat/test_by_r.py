@@ -2,6 +2,7 @@ from __future__ import annotations
 import dataclasses
 from .r_to_py import as_dict
 from .util import py2r
+from func_helper import pip
 import dataframe_helper as dataframe
 from scipy import stats as scipy_stats
 import numpy as np
@@ -138,7 +139,7 @@ def wilcoxon_signed_rank_test(df, group, y, paired=True, method="bonferroni"):
     y: str
     paired: bool
     """
-    py2r("d", pandas2ri.py2ri(df))
+    py2r("d", df)
     result = ro.r(
         f"pairwise.wilcox.test(d${y},d${group},paired={'T' if paired else 'F'},p.adjust.method='{method}')")
     result_dict = as_dict(result)
@@ -366,3 +367,20 @@ def basic_stat(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
         "std": map(lambda s: s.std(), xs),
         "count": map(lambda s: s.count(), xs)
     }, index=names)
+
+
+Nanpolicy = Literal["propagate", "raise", "omit"]
+
+
+def kruskal(df, group, target, nan_policy: Nanpolicy | None = None):
+    factors = pip(
+        np.unique,
+        np.sort
+    )(df[group])
+
+    groups = list(map(
+        lambda factor: df[df[group] == factor][target],
+        factors
+    ))
+
+    return scipy_stats.kruskal(*groups, nan_policy=nan_policy)
