@@ -282,7 +282,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
 Larger = Literal["left", "right"]
 
 
-def compare_test_suite(x, y, paired, presenter=print, with_larger=False) -> tuple[bool, Larger | None, dict]:
+def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | None, dict]:
     if len(x) < 3 or len(y) < 3:
         presenter(
             f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
