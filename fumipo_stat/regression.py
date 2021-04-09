@@ -249,7 +249,7 @@ class GLM2Result(IRegressionModelResult):
         # , and self.get_summary_section(12, None) is coeff_matrix
         coeff_matrix = self.get_summary_section(11, None)
         names = list(map(R_poly_to_power,
-                         coeff_matrix.names[0])) if coeff_matrix is not None else []
+                         coeff_matrix[0].names[0])) if coeff_matrix is not None else []
         return names
 
     def is_significant(self, threshold: float = 0.05, strict: bool = True) -> bool:
@@ -266,7 +266,8 @@ class GLM2Result(IRegressionModelResult):
             return (PrettyNamedMatrix([[None for __ in range(4)] for _ in range(1)], colnames=range(4), rownames=range(1)))
         else:
             variables = self.get_variables()
-            return (PrettyNamedMatrix(coeff_matrix, rownames=variables))
+            colnames = ["Estimate", "Std. Error", "t value", "Pr(>|t|)"]
+            return (PrettyNamedMatrix(coeff_matrix, colnames=colnames, rownames=variables))
 
     @presentable
     def AIC(self):
