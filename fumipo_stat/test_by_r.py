@@ -283,10 +283,19 @@ Larger = Literal["left", "right"]
 
 
 def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | None, dict]:
+    empty_result = {
+        "test": None,
+        "statistics": None,
+        "pvalue": None,
+        "dof": None,
+        "significant": False,
+        "note": None,
+    }
+
     if len(x) < 3 or len(y) < 3:
-        presenter(
-            f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}")
-        return (False, None, {})
+        note = f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}"
+        presenter(note)
+        return (False, None, empty_result | {"note": note})
 
     def which_is_larger(left, right, method) -> Larger | None:
         l = method(left)
@@ -360,7 +369,16 @@ def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | No
     return (is_significant, larger, result)
 
 
-def basic_stat(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
+def basic_stat_map(s: pd.Series) -> dict:
+    return {
+        "mean": s.mean(),
+        "median": s.median(),
+        "std": s.std(),
+        "count": s.count(),
+    }
+
+
+def basic_stat_df(xs: list[pd.Series], names: list[str]) -> pd.DataFrame:
     return pd.DataFrame({
         "mean": map(lambda s: s.mean(), xs),
         "median": map(lambda s: s.median(), xs),
