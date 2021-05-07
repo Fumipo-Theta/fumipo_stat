@@ -13,6 +13,7 @@ import rpy2.robjects as ro
 from rpy2.robjects.packages import data, importr
 
 importr("multcomp")
+base = importr("base")
 
 
 def ANOVA(*array_likes):
@@ -170,13 +171,15 @@ def wilcoxon_rank_sum_test(x: np.ndarray, y: np.ndarray, raw=False):
         return WilcoxonRankSumTestResult(result_dict["statistic"], result_dict["p.value"])
 
 
-def tukey_hsd(df, x, y):
+def tukey_hsd(df, x, y) -> tuple:
     _df = df[[x, y]]
     _df[x] = _df[x].astype("category")
     py2r("d", _df)
     ro.r(f"aov_res <- aov({y}~{x}, d)")
     ro.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
-    return ro.r("cld(tuk, decreasing=T)")
+    tuk = base.summary(ro.r("tuk"))
+    cld = ro.r("cld(tuk, decreasing=T)")
+    return (tuk, cld)
 
 
 def steel_dwass(df, x, y, **kwargs):
