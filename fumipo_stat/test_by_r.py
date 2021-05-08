@@ -234,7 +234,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
             return shapiro_test(series).pvalue > threshold
         return all(map(is_normal, [df[df[group_col] == group][test_col] for group in groups]))
 
-    def check_equivarient(df, test_col, group_col, groups, threshold):
+    def check_equivariant(df, test_col, group_col, groups, threshold):
         bartlett_res = bartlett(*[
             df[df[group_col] == group][test_col] for group in groups
         ])
@@ -243,12 +243,12 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
     def parametric_compat(df, test_col, group_col, groups, threshold):
         are_all_normal = check_normal(
             df, test_col, group_col, groups, threshold)
-        are_all_equi_var = check_equivarient(
+        are_all_equi_var = check_equivariant(
             df, test_col, group_col, groups, threshold)
         if are_all_normal and are_all_equi_var:
             return (True, None)
         elif are_all_normal:
-            return (False, "not equivarient")
+            return (False, "not equivariant")
         elif are_all_equi_var:
             # 今回はデータサイズ同じなのでパラメトリックでも良い
             return (True, "not normal")
@@ -258,7 +258,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
     (is_parametric_compat, reason) = parametric_compat(
         data, test_col, group_col, _groups, p_threshold)
     if is_parametric_compat:
-        res = ("TukeyHSD", reason, tukey_hsd(data, group_col, test_col))
+        res = ("TukeyHSD", reason, tukey_hsd(data, group_col, test_col)[1])
     else:
         _df = data[[test_col, group_col]]
         _df[test_col] = _df[test_col].apply(lambda v: np.power(v, 0.25))
@@ -266,7 +266,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
             _df, test_col, group_col, _groups, p_threshold)
         if is_parametric_compat:
             res = ("TukeyHSD_biquadroot", reason,
-                   tukey_hsd(_df, group_col, test_col))
+                   tukey_hsd(_df, group_col, test_col)[1])
         else:
             __df = _df[[test_col, group_col]]
             __df[test_col] = __df[test_col].apply(lambda v: np.log(v))
@@ -274,7 +274,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
                 __df, test_col, group_col, _groups, p_threshold)
             if is_parametric_compat:
                 res = ("TukeyHSD_log", reason, tukey_hsd(
-                    __df, group_col, test_col))
+                    __df, group_col, test_col)[1])
             else:
                 significance = steel_dwass(data, group_col, test_col)
                 res = ("SteelDwass", reason, cld(
