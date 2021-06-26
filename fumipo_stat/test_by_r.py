@@ -285,6 +285,12 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
 Larger = Literal["left", "right"]
 
 
+def _len(i):
+    if hasattr(i, "count"):
+        return i.count()
+    return len(i[np.isfinite(a)])
+
+
 def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | None, dict]:
     empty_result = {
         "test": None,
@@ -294,9 +300,8 @@ def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | No
         "significant": False,
         "note": None,
     }
-
-    if len(x) < 3 or len(y) < 3:
-        note = f"Data size must be larger than 3. Actural x: {len(x)}, y: {len(y)}"
+    if _len(x) < 3 or _len(y) < 3:
+        note = f"Data size must be larger than 3. Actural x: {_len(x)}, y: {_len(y)}"
         presenter(note)
         return (False, None, empty_result | {"note": note})
 
