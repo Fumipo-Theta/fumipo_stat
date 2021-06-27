@@ -288,7 +288,7 @@ Larger = Literal["left", "right"]
 def _len(i):
     if hasattr(i, "count"):
         return i.count()
-    return len(i[np.isfinite(a)])
+    return len(i[np.isfinite(i)])
 
 
 def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | None, dict]:
