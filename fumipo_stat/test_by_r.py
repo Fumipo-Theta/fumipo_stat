@@ -338,7 +338,7 @@ def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | No
             note = "are not normal distribution and not equal variance"
             exam_result = WilcoxonSignedRankTestResult(*scipy_stats.wilcoxon(
                 x, y))
-            larger = which_is_larger(x, y, np.median)
+            larger = which_is_larger(x, y, np.nanmedian)
     else:
         presenter("Individual test")
 
@@ -353,7 +353,7 @@ def compare_test_suite(x, y, paired, presenter=print) -> tuple[bool, Larger | No
         else:
             note = "are not normal distribution and not equal variance"
             exam_result = wilcoxon_rank_sum_test(x, y)
-            larger = which_is_larger(x, y, np.median)
+            larger = which_is_larger(x, y, np.nanmedian)
 
     if exam_result.pvalue <= 0.05:
         label = '**Maybe significant**'
