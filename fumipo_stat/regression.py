@@ -160,7 +160,7 @@ class LMResult(IRegressionModelResult):
                 self.coeff().as_dict()["Pr(>|t|)"].values()
             ))
         else:
-            all(
+            return all(
                 map(
                     lambda kp: kp[1] < threshold,
                     filter(
