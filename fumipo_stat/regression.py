@@ -154,10 +154,18 @@ class LMResult(IRegressionModelResult):
         return variables
 
     def is_significant(self, threshold: float = 0.05, strict: bool = True) -> bool:
-        return all(map(
-            lambda p: p < threshold,
-            self.coeff().as_dict()["Pr(>|t|)"].values()
-        ))
+        if strict:
+            return all(map(
+                lambda p: p < threshold,
+                self.coeff().as_dict()["Pr(>|t|)"].values()
+            ))
+        else:
+            all(
+                map(
+                    lambda kp: kp[1] < threshold,
+                    filter(
+                        lambda kv: kv[0] != '(Intercept)',
+                        self.coeff().as_dict()["Pr(>|t|)"].items())))
 
     @presentable
     def coeff(self):
