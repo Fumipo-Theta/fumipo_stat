@@ -46,6 +46,49 @@ class InvalidResult:
     pvalue: float
 
 
+from sklearn.linear_model import LinearRegression
+from statsmodels.stats.diagnostic import normal_ad
+
+
+@dataclasses.dataclass()
+class AndersonDarlingTestResult:
+    p_value: float
+    statistics: float
+
+    def is_significant(self, p_threshold):
+        return self.p_value >= p_threshold
+
+
+class TestNormalityOfError:
+    """
+    X should be a multi-dimensional vector.
+    If you want to pass pd.Series, call `.values.reshape(-1, 1)` and pass the returned array.
+    """
+
+    def __init__(self, X: pd.Series, y: pd.Series):
+        self.model = LinearRegression()
+        self.model.fit(X, y)
+        self.X = X
+        self.y = y
+
+    def __calculate_residuals(self):
+        """
+        Creates predictions on the features with the model and calculates residuals
+        """
+        predictions = self.model.predict(self.X)
+        df_results = pd.DataFrame({'Actual': self.y, 'Predicted': predictions})
+        df_results['Residuals'] = abs(
+            df_results['Actual']) - abs(df_results['Predicted'])
+
+        return df_results
+
+    def test(self) -> AndersonDarlingTestResult:
+        df_results = self.__calculate_residuals()
+        statistics, p_value = normal_ad(df_results['Residuals'])
+
+        return AndersonDarlingTestResult(p_value, statistics)
+
+
 def shapiro_test(array_like):
     """
     正規性テスト

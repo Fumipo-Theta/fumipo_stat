@@ -7,6 +7,7 @@ import pandas as pd
 import rpy2.robjects as robjects
 from rpy2.robjects.packages import importr
 from .util import py2r
+from dataclasses import dataclass
 base = importr('base')
 importr("multcomp")
 importr("glm2")
@@ -57,6 +58,31 @@ def count_degree(express):
     import re
     result = re.search(r"poly.*degree=(\d+)", express)
     return int(result.groups()[0]) if result else 1
+
+
+@dataclass
+class FStatistics:
+    f_value: float
+    dofs: list[float]
+
+    def __repr__(self):
+        """
+        returns a string as follow:
+
+        F-statistic: {f} on {dof1} and {dof2} and ... and {dofn} DoF
+        """
+        dofs_string = reduce(
+            lambda acc, e: f"{acc} and {e}" if acc != "" else e, self.dofs, "")
+        return f"F-statistic: {self.f_value} on {dofs_string} DoF"
+
+    def __str__(self):
+        return self.__repr__()
+
+    def get_f_value(self):
+        return self.f_value
+
+    def get_dofs(self):
+        return self.dofs
 
 
 class IRegressionModelResult:
@@ -166,6 +192,13 @@ class LMResult(IRegressionModelResult):
                     filter(
                         lambda kv: kv[0] != '(Intercept)',
                         self.coeff().as_dict()["Pr(>|t|)"].items())))
+
+    def f_statistics(self) -> FStatistics:
+        """
+        F-statistic: {f} on {df1} and {df2} DF
+        """
+        f, df1, df2 = self.summary().rx2(10)
+        return FStatistics(f, [df1, df2])
 
     @presentable
     def coeff(self):
@@ -388,7 +421,27 @@ class LM(IRegressionModel):
     -----
     lm = LM()
     lm.fit(data, y_column, x_column1, x_column_2)
-    coeff = lm.coeff()
+    coeff = lm.coeff().as_dict()
+
+    # Example of coeff
+    coeff = {
+        'Estimate': {
+            '(Intercept)': -12.66863903440659,
+            'photon': 4.092616876300162
+        },
+        'Std. Error': {
+            '(Intercept)': 6.503325010299246,
+            'photon': 0.7534521569237514
+        },
+        't value': {
+            '(Intercept)': -1.9480248971631284,
+            'photon': 5.431820506042204
+        },
+        'Pr(>|t|)': {
+                '(Intercept)': 0.05752895762315295,
+                'photon': 2.037628873365147e-06
+        }
+    }
     """
 
     def __init__(self):
