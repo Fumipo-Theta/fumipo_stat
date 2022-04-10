@@ -288,9 +288,9 @@ class GLM2Result(IRegressionModelResult):
         # This gets invalid attribute when the data set has any NA values.
         # In the case, self.get_summary_section(10, None) will be (omit,)
         # , and self.get_summary_section(12, None) is coeff_matrix
-        coeff_matrix = self.get_summary_section(11, None)
+        coeff_matrix = self.result()[0]
         names = list(map(R_poly_to_power,
-                         coeff_matrix[0].names[0])) if coeff_matrix is not None else []
+                         coeff_matrix.names)) if coeff_matrix is not None else []
         return names
 
     def is_significant(self, threshold: float = 0.05, strict: bool = True) -> bool:
@@ -301,14 +301,14 @@ class GLM2Result(IRegressionModelResult):
 
     @presentable
     def coeff(self):
-        coeff_matrix = self.get_summary_section(11, None)
+        coeff_matrix = self.get_summary_section(12, None)
 
         if coeff_matrix is None:
             return (PrettyNamedMatrix([[None for __ in range(4)] for _ in range(1)], colnames=range(4), rownames=range(1)))
         else:
-            variables = self.get_variables()
+            variables = self.result()[0].names
             colnames = ["Estimate", "Std. Error", "t value", "Pr(>|t|)"]
-            return (PrettyNamedMatrix(coeff_matrix, colnames=colnames, rownames=variables))
+            return (PrettyNamedMatrix(coeff_matrix[0], colnames=colnames, rownames=variables))
 
     @presentable
     def AIC(self):
@@ -318,7 +318,7 @@ class GLM2Result(IRegressionModelResult):
         sample_size = result[16][0]
         parameter_size = sample_size - result[15][0]
         aic = self.get_summary_section(4)[0]
-        return aic
+        return aic[0]
         # if (sample_size/parameter_size) > 40:
         #    return aic
         # else:
@@ -327,12 +327,12 @@ class GLM2Result(IRegressionModelResult):
     @presentable
     def residual_deviance(self):
         res_dev = self.get_summary_section(3)
-        return res_dev[0] if res_dev is not None else None
+        return res_dev[0][0] if res_dev is not None else None
 
     @presentable
     def null_deviance(self):
         null_dev = self.get_summary_section(7)
-        return null_dev[0] if null_dev is not None else None
+        return null_dev[0][0] if null_dev is not None else None
 
     @presentable
     def psuedo_r_squared(self):

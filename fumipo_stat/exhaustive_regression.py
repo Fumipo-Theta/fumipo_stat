@@ -174,7 +174,7 @@ def get_estimate_statistics(df, var_name, presenter):
 
 
 class Predictor:
-    def __init__(self, terms, expressions, *, disc: str=""):
+    def __init__(self, terms, expressions, *, disc: str = ""):
         self.terms = terms
         self.expressions = expressions
         self.discription = disc
