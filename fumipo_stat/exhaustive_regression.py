@@ -3,6 +3,7 @@ import numpy as np
 from func_helper import pip
 import re
 from functools import reduce
+from tqdm import tqdm
 
 
 def has_scaled(term: str):
@@ -335,9 +336,16 @@ class ExhaustiveRegression:
         full_model = self.regression.fit(df, objective, *variables)
         all_vars = full_model.get_variables()
 
+        results = []
+        for explains in tqdm(var_subset):
+            results.append(
+                glm_with(lambda explains: self.regression.fit(
+                    df, objective, *explains), all_vars
+                )(explains)
+            )
+
         models = pd.DataFrame.from_records(
-            map(glm_with(lambda explains: self.regression.fit(
-                df, objective, *explains), all_vars), var_subset),
+            results,
             columns=[*all_vars, "AIC", "R2", "coeff"]
         )
         return ExhaustiveResult(models, all_vars, repr(self))
