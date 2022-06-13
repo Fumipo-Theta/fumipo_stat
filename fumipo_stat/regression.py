@@ -310,8 +310,19 @@ class GLM2Result(IRegressionModelResult):
                 colnames = ["Estimate", "Std. Error", "t value", "Pr(>|t|)"]
                 return (PrettyNamedMatrix(coeff_matrix[0], colnames=colnames, rownames=variables))
         except Exception as e:
-            print(self)
-            raise e
+
+            coeff_matrix = self.get_summary_section(11, None)
+            try:
+                if coeff_matrix is None:
+                    return (PrettyNamedMatrix([[None for __ in range(4)] for _ in range(1)], colnames=range(4), rownames=range(1)))
+                else:
+                    variables = self.result()[0].names
+                    colnames = ["Estimate", "Std. Error",
+                                "t value", "Pr(>|t|)"]
+                    return (PrettyNamedMatrix(coeff_matrix[0], colnames=colnames, rownames=variables))
+            except Exception as e:
+                print(self)
+                raise e
 
     @presentable
     def AIC(self):
