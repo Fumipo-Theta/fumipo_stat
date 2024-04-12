@@ -15,6 +15,7 @@ func-helper = {git = "https://github.com/Fumipo-Theta/func_helper"}
 dataframe-helper = {git = "https://github.com/Fumipo-Theta/dataframe_helper"}
 data-loader = {git = "https://github.com/Fumipo-Theta/data_loader"}
 tqdm = "*"
+networkx = "<3"
 
 [dev-packages]
 
