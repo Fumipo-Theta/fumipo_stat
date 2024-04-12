@@ -241,6 +241,7 @@ def cld(significance, labels):
     # 有意差のないものを 1 とする
     mat = (significance > 0.05)
 
+    # TODO: nx.from_numpy_matrix removed from networkx >= 3
     V = nx.from_numpy_matrix(mat)
     G = nx.Graph(V)
 
