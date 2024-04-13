@@ -221,7 +221,7 @@ def tukey_hsd(df, x, y) -> tuple:
     ro.r(f"aov_res <- aov({y}~{x}, d)")
     ro.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
     tuk = base.summary(ro.r("tuk"))
-    cld = ro.r("cld(tuk, decreasing=T)")
+    cld = ro.r("cld(tuk, decreasing=T, reversed=T)")
     return (tuk, cld)
 
 
