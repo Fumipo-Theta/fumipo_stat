@@ -224,6 +224,7 @@ def tukey_hsd(df, x, y) -> tuple:
     cld = ro.r("cld(tuk, decreasing=TRUE, reversed=TRUE)")
     letters = cld[9][0].names
     values = cld[9][0][:]
+    print(tuk)
     return (tuk, {l: v for l, v in zip(letters, values)})
 
 
@@ -231,7 +232,9 @@ def steel_dwass(df, x, y, **kwargs):
     """
     TukeyHSD のノンパラメトリック版
     """
-    return sp.posthoc_dscf(df, val_col=y, group_col=x, **kwargs)
+    result = sp.posthoc_dscf(df, val_col=y, group_col=x, **kwargs)
+    print(result)
+    return result
 
 
 def cld(significance, labels):
