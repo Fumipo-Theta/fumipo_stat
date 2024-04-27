@@ -296,7 +296,7 @@ def multicomp(df: pd.DataFrame, test_col, group_col, groups: Sequence = [], pres
         elif are_all_normal:
             return (False, "not equivariant")
         elif are_all_equi_var:
-            # 今回はデータサイズ同じなのでパラメトリックでも良い
+            # R の TukeyHSD は Tukey-Kramer 法を使っているのでデータサイズが違っても良い
             return (True, "not normal")
         else:
             return (False, "complex distribution")
