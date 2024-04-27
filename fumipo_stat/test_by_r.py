@@ -221,8 +221,10 @@ def tukey_hsd(df, x, y) -> tuple:
     ro.r(f"aov_res <- aov({y}~{x}, d)")
     ro.r(f"tuk <- glht(aov_res, linfct=mcp({x}='Tukey'))")
     tuk = base.summary(ro.r("tuk"))
-    cld = ro.r("cld(tuk, decreasing=T, reversed=T)")
-    return (tuk, cld)
+    cld = ro.r("cld(tuk, decreasing=TRUE, reversed=TRUE)")
+    letters = cld[9][0].names
+    values = cld[9][0][:]
+    return (tuk, {l: v for l, v in zip(letters, values)})
 
 
 def steel_dwass(df, x, y, **kwargs):
